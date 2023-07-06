@@ -70,7 +70,7 @@ def adx(data , freq=14, window=20, down_level=25, plot_data={2:[('plus_di',None,
 
         return df
     
-def rsi(data, freq=30, window=14, up_level=70, down_level=30, plot_data={2:[('RSI',['up_level','down_level'], 'blue')]}):
+def rsi(data, freq=30, window=14, up_level=70, down_level=30,neutral_level_dist=20, bars_ob=1, plot_data={2:[('RSI',['up_level','down_level'], 'blue')]}):
     
     ''' Prepares the Data for Backtesting.
     '''
@@ -87,11 +87,26 @@ def rsi(data, freq=30, window=14, up_level=70, down_level=30, plot_data={2:[('RS
     
     df['RSI_shifted']=df['RSI'].shift(1)
     
+    
+    neutral_level_up=up_level-neutral_level_dist
+    neutral_level_down=down_level+neutral_level_dist
+    neutral_level_max=(up_level+down_level)/2
+    
+    if (neutral_level_up < neutral_level_max) or (neutral_level_down > neutral_level_max):
+        neutral_level_up=neutral_level_max
+        neutral_level_down=neutral_level_max
+        print(f'Neutral levels are overlapping and neutral level is set to midpoint - {neutral_level_max}')
+        
+    df['bar_ob']=np.where(((df['RSI']>up_level) | (df['RSI']<down_level)),1,0 )
+    df['bar_ob_sum']=df['bar_ob'].rolling(bars_ob).sum()[bars_ob-1::bars_ob]
+    df['bar_ob_sum']=df['bar_ob_sum'].fillna(0)
+    df['bar_ob_sum']=df['bar_ob_sum'].shift(1)
     #conditions
-    conditions=[(df['RSI']<up_level )& (df['RSI_shifted']>up_level) ,
-               (df['RSI']>down_level) & (df['RSI_shifted']<down_level),
-               (df['RSI']<50 )& (df['RSI_shifted']>50) ,
-               (df['RSI']>50) & (df['RSI_shifted']<50)]
+    conditions=[((df['RSI']<up_level )& (df['RSI_shifted']>up_level)) & (df['bar_ob_sum']==bars_ob),
+               ((df['RSI']>down_level) & (df['RSI_shifted']<down_level)) & (df['bar_ob_sum']==bars_ob),
+                
+               (df['RSI']<neutral_level_up )& (df['RSI_shifted']>neutral_level_up) ,
+               (df['RSI']>neutral_level_down) & (df['RSI_shifted']<neutral_level_down)]
     
     #to handle taking neutral position, there are additoinal conditions with values of -2 and 2
     values=[-1,1,-2,2]
